@@ -1,0 +1,51 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  ollama:
+    build:
+      context: .
+      dockerfile: ollama.Dockerfile
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+
+  backend:
+    build: .
+    container_name: app_backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - ollama
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - GITHUB_TOKEN=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
+      - OLLAMA_BASE_URL=http://ollama:11434
+
+  worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A app.core.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - ollama
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - GITHUB_TOKEN=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
+      - OLLAMA_BASE_URL=http://ollama:11434
+
+volumes:
+  ollama:

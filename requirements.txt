@@ -1,0 +1,10 @@
+langchain 
+langgraph 
+langchain-ollama
+langchain_community
+redis
+fastapi
+uvicorn[standard]
+celery
+GitPython
+PyGithub
