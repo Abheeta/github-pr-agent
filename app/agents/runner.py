@@ -1,12 +1,17 @@
 from app.agents.tools import fetch_diff, analyze_code_diff
+from app.agents.graph import graph
 
 def run_agent(repo_url: str, pr_number: int):
     print(f"[DEBUG] Running agent on repo: {repo_url}, PR: {pr_number}")
-    
-    # 1. Call the fetch_diff tool properly
-    diff = fetch_diff.invoke({"repo_url": repo_url, "pr_number": pr_number})
 
-    # 2. Analyze it
-    result = analyze_code_diff.invoke({"code_diff": diff})
+    # Initial input state
+    initial_state = {
+        "repo_url": repo_url,
+        "pr_number": pr_number,
+    }
 
-    return result
+    # Invoke the graph with the initial state
+    final_state: AgentState = graph.invoke(initial_state)
+
+    print("[DEBUG] Final state:", final_state["result"])
+    return final_state["result"]  # or return entire final_state if needed
