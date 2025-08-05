@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from app.models.schema import AnalyzePRRequest, AnalyzePRResponse, StatusResponse
 from app.tasks.analyze import analyze_pr_task
 from celery.result import AsyncResult
+from app.core.celery_app import celery_app
 import os
 
 router = APIRouter()
@@ -15,10 +16,16 @@ def analyze_pr(payload: AnalyzePRRequest):
 
 @router.get("/status/{task_id}", response_model=StatusResponse)
 def get_status(task_id: str):
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
+    full_result = result.result if result.successful() else None
+    raw = None
+
+    if full_result and isinstance(full_result, dict):
+        raw = full_result.get("results", {}).get("raw")
+
     return {
         "task_id": task_id,
         "status": result.status,
-        "result": result.result if result.successful() else None,
+        "results": raw,
         "error": str(result.result) if result.failed() else None,
     }

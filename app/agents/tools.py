@@ -32,39 +32,80 @@ def fetch_diff(repo_url: str, pr_number: int) -> str:
 def analyze_code_diff(code_diff: str) -> dict:
     """Analyze a code diff for style, bugs, performance, and best practices."""
     from langchain_ollama import OllamaLLM 
+    from collections import defaultdict
+    import json
+    import os
 
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
     llm = OllamaLLM(model="codellama:7b", base_url=base_url)
 
     prompt = f"""
-You are a code review assistant. Analyze the following code diff and return a JSON with:
+You are a code review assistant.
 
-- Issues of type: "style", "bug", "performance", or "best_practice"
-- For each issue: line number, description, and suggestion
+Analyze the following code diff and return a JSON list of issues grouped by file. For each issue, include:
+
+- file name
+- issue type: one of "style", "bug", "performance", or "best_practice"
+- line number
+- description
+- suggestion
+- whether it's critical (true for "bug" or "performance")
 
 Diff:
 {code_diff}
 
 Return in this JSON format:
-{{
-  "issues": [
-    {{
-      "type": "style",
-      "line": 10,
-      "description": "Line too long",
-      "suggestion": "Split into multiple lines"
-    }}
-  ],
-  "summary": {{
-    "total_issues": X,
-    "critical_issues": Y
+
+[
+  {{
+    "file": "",
+    "type": "",
+    "line": "",
+    "description": "",
+    "suggestion": "",
+    "critical": boolean
   }}
-}}
+]
+
+Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
+Your response must start with `[` and end with `]`.
 """
-    response = llm.invoke(prompt)
+    raw_output = llm.invoke(prompt)
+
     try:
-        import json
-        return json.loads(response)
+        raw_issues = json.loads(raw_output)
+        files_dict = defaultdict(list)
+        for issue in raw_issues:
+            files_dict[issue["file"]].append({
+                "type": issue["type"],
+                "line": issue["line"],
+                "description": issue["description"],
+                "suggestion": issue["suggestion"]
+            })
+
+        files = [
+            {
+                "name": filename,
+                "issues": issues
+            }
+            for filename, issues in files_dict.items()
+        ]
+
+        total_issues = len(raw_issues)
+        critical_issues = sum(1 for issue in raw_issues if issue.get("critical"))
+
+        summary = {
+            "total_files": len(files),
+            "total_issues": total_issues,
+            "critical_issues": critical_issues
+        }
+
+        results = {
+            "files": files,
+            "summary": summary
+        }
+
+        return {"error": None, "raw": results}
+
     except Exception:
-        return {"error": "Failed to parse model response", "raw": response}
+        return {"error": "Failed to parse model response", "raw": raw_output}
