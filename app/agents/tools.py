@@ -172,7 +172,8 @@ CRITICAL:
 - bug = runtime errors/broken functionality
 - performance = significant performance issues
 - Return [] if no issues found
-- Return ONLY the JSON array, no other text
+- Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
+Your response must start with `[` and end with `]`.
 """
     raw_output = llm.invoke(prompt)
 
