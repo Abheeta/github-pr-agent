@@ -30,7 +30,7 @@ services:
       - ollama
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - GITHUB_TOKEN=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
+      # - GITHUB_TOKEN=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
       - OLLAMA_BASE_URL=http://ollama:11434
 
   worker:

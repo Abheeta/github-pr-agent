@@ -4,16 +4,17 @@ from app.agents.tools import fetch_diff, analyze_code_diff
 
 
 def fetch_diff_node(state: AgentState) -> AgentState:
-    diff = fetch_diff.run(tool_input={
+    [diff, file_content] = fetch_diff.run(tool_input={
         "repo_url": state["repo_url"],
         "pr_number": state["pr_number"]
     })
-    return {**state, "code_diff": diff}
+    return {**state, "code_diff": diff, "file_content": file_content}
 
 
 def analyze_node(state: AgentState) -> AgentState:
     result = analyze_code_diff.run(tool_input={
-        "code_diff": state["code_diff"]
+        "code_diff": state["code_diff"],
+        "file_content": state["file_content"]
     })
     return {**state, "result": result}
 
