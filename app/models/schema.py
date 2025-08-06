@@ -5,8 +5,7 @@ class AnalyzePRRequest(BaseModel):
     repo_url: str
     pr_number: int
     github_token: Optional[str] = None
-    
-
+    webhook_url: Optional[HttpUrl] = None
 
 class AnalyzePRResponse(BaseModel):
     task_id: str
@@ -14,7 +13,7 @@ class AnalyzePRResponse(BaseModel):
 
 class Issue(BaseModel):
     type: str
-    line: int
+    line: Optional[int] = None
     description: str
     suggestion: str
 

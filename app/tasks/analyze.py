@@ -3,10 +3,10 @@ from app.agents.runner import run_agent
 
 
 @celery_app.task(name="app.tasks.analyze.analyze_pr_task")
-def analyze_pr_task(repo_url: str, pr_number: int, github_token: str = None):
+def analyze_pr_task(repo_url: str, pr_number: int, github_token: str = None, webhook_url: str = None):
     print(f"Received task with repo_url={repo_url}, pr_number={pr_number}")
     try:
-        result = run_agent(repo_url, pr_number, github_token)
+        result = run_agent(repo_url, pr_number, github_token, webhook_url)
         return {
             "status": "completed",
             "results": result

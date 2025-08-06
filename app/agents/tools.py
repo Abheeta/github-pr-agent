@@ -5,6 +5,7 @@ import os
 import base64
 from typing import Optional
 import json
+import google.generativeai as genai
 
 def parse_repo_url(repo_url: str) -> tuple[str, str]:
     parsed = urlparse(repo_url)
@@ -137,7 +138,46 @@ def analyze_code_diff(code_diff: str, file_content: str) -> dict:
     import os
 
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    llm = OllamaLLM(model="codellama:7b", base_url=base_url)
+    # llm = OllamaLLM(model="codellama:7b", base_url=base_url)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+
+#For Ollama
+#     prompt = f"""
+# SYSTEM: You are a code review assistant. Analyze the Git diff and return ONLY a JSON array of issues. Do not explain, acknowledge, or provide any other text.
+
+# TASK: Identify actual issues introduced by the changes in the diff below.
+
+# RULES:
+# - Only analyze lines with + (additions) and - (deletions)
+# - Ignore pre-existing code that wasn't changed
+# - Don't flag intentionally commented-out code as unused
+# - Focus on problems introduced by the changes
+
+# FILE CONTENT BEFORE CHANGES:
+# {file_content}
+
+# GIT DIFF:
+# {code_diff}
+
+# OUTPUT FORMAT - Return ONLY this JSON structure, nothing else:
+# [
+#   {{
+#     "file": "filename",
+#     "type": "bug|style|performance|best_practice", 
+#     "line": number,
+#     "description": "issue description",
+#     "suggestion": "fix suggestion",
+#     "critical": true|false
+#   }}
+# ]
+
+# CRITICAL: 
+# - bug = runtime errors/broken functionality
+# - performance = significant performance issues
+# - Return [] if no issues found
+# - Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
+# Your response must start with `[` and end with `]`.
+# """
 
     prompt = f"""
 SYSTEM: You are a code review assistant. Analyze the Git diff and return ONLY a JSON array of issues. Do not explain, acknowledge, or provide any other text.
@@ -149,6 +189,12 @@ RULES:
 - Ignore pre-existing code that wasn't changed
 - Don't flag intentionally commented-out code as unused
 - Focus on problems introduced by the changes
+
+Strict output rules:
+- DO NOT wrap your response in triple backticks
+- DO NOT add any explanation, description, or extra text
+- DO NOT include the word "json", "output", or any prefix
+- The response MUST start with [ and end with ]
 
 FILE CONTENT BEFORE CHANGES:
 {file_content}
@@ -172,10 +218,14 @@ CRITICAL:
 - bug = runtime errors/broken functionality
 - performance = significant performance issues
 - Return [] if no issues found
-- Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
+- Return *only* raw JSON. Do not wrap the response in triple backticks (
+), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
 Your response must start with `[` and end with `]`.
 """
-    raw_output = llm.invoke(prompt)
+    # raw_output = llm.invoke(prompt)
+    response = model.generate_content(prompt)
+    raw_output = response.text.strip()
+
 
     try:
         raw_issues = json.loads(raw_output)

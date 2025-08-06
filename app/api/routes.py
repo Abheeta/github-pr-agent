@@ -9,7 +9,8 @@ router = APIRouter()
 
 @router.post("/analyze-pr", response_model=AnalyzePRResponse)
 def analyze_pr(payload: AnalyzePRRequest):
-    task = analyze_pr_task.delay(payload.repo_url, payload.pr_number, payload.github_token)
+    webhook_url = str(payload.webhook_url) if payload.webhook_url else None
+    task = analyze_pr_task.delay(payload.repo_url, payload.pr_number, payload.github_token, webhook_url)
     return {"task_id": task.id}
 
 

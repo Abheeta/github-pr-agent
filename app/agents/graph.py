@@ -1,7 +1,11 @@
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.tools import fetch_diff, analyze_code_diff
+import google.generativeai as genai
+import os
 
+api_key = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key="")
 
 def fetch_diff_node(state: AgentState) -> AgentState:
     [diff, file_content] = fetch_diff.run(tool_input={
