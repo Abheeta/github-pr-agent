@@ -4,6 +4,19 @@ services:
     ports:
       - "6379:6379"
 
+  ollama:
+    build:
+      context: .
+      dockerfile: ollama.Dockerfile
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+
   backend:
     build: .
     container_name: app_backend
@@ -14,9 +27,10 @@ services:
       - "8000:8000"
     depends_on:
       - redis
+      - ollama
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - LLM_TO_USE=${LLM_TO_USE}
+      - OLLAMA_BASE_URL=http://ollama:11434
 
   worker:
     build: .
@@ -26,8 +40,13 @@ services:
       - .:/app
     depends_on:
       - redis
+      - ollama
     environment:
       - REDIS_URL=redis://redis:6379/0
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
       - LLM_TO_USE=${LLM_TO_USE}
+
+volumes:
+  ollama:

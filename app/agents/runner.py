@@ -21,7 +21,6 @@ def run_agent(repo_url: str, pr_number: int, github_token: str = None, webhook_u
     try:
         final_state = graph.invoke(initial_state)
         result_data = final_state.get("result", {})
-        # raw = final_state.get("result", {}).get("raw")
         print(final_state, "FINAL STATE")
 
         # Store successful results in Redis

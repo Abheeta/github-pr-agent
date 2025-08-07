@@ -5,7 +5,7 @@ import google.generativeai as genai
 import os
 
 api_key = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key="")
+genai.configure(api_key=api_key)
 
 def fetch_diff_node(state: AgentState) -> AgentState:
     [diff, file_content] = fetch_diff.run(tool_input={

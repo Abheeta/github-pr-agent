@@ -3,9 +3,11 @@ from langchain.tools import tool
 from urllib.parse import urlparse
 import os
 import base64
-from typing import Optional
 import json
 import google.generativeai as genai
+from typing import Optional, Tuple, Dict, List
+from langchain_ollama import OllamaLLM 
+from collections import defaultdict
 
 def parse_repo_url(repo_url: str) -> tuple[str, str]:
     parsed = urlparse(repo_url)
@@ -13,62 +15,6 @@ def parse_repo_url(repo_url: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError(f"Invalid GitHub repo URL: {repo_url}")
     return parts[0], parts[1]
-
-
-# @tool
-# def fetch_diff(repo_url: str, pr_number: int, github_token: str = None) -> str:
-#     """Fetch the code diff of a GitHub PR."""
-#     # token = os.getenv("GITHUB_TOKEN")
-#     g = Github(github_token) if github_token else Github()
-
-#     owner, repo = parse_repo_url(repo_url)
-#     repo_obj = g.get_repo(f"{owner}/{repo}")
-#     pr = repo_obj.get_pull(pr_number)
-
-#     diff = ""
-#     for file in pr.get_files():
-#         diff += f"\n--- {file.filename} ---\n"
-#         diff += file.patch or ""
-#     return diff
-
-# @tool
-# def fetch_diff(repo_url: str, pr_number: int, github_token: Optional[str] = None) -> str:
-#     """Fetch the full content and code diff of each file in a GitHub PR."""
-#     g = Github(github_token) if github_token else Github()
-
-#     owner, repo = parse_repo_url(repo_url)
-#     repo_obj = g.get_repo(f"{owner}/{repo}")
-#     pr = repo_obj.get_pull(pr_number)
-
-#     result = []
-
-#     for file in pr.get_files():
-#         file_info = {
-#             "filename": file.filename,
-#             "status": file.status,  # "modified", "added", "removed"
-#             "patch": file.patch or ""
-#         }
-
-#         if file.status != "added":
-#             # Try to get the file content from base branch
-#             try:
-#                 contents = repo_obj.get_contents(file.filename, ref=pr.base.ref)
-#                 file_info["content"] = base64.b64decode(contents.content).decode("utf-8")
-#             except Exception as e:
-#                 file_info["content"] = None
-#                 file_info["error"] = str(e)
-#         else:
-#             # For newly added files, skip content fetching (patch already has it)
-#             file_info["content"] = None
-
-#         result.append(file_info)
-#     print("File diff done")
-#     return json.dumps(result)
-
-from typing import Optional, Tuple, Dict, List
-import json
-import base64
-from github import Github
 
 @tool
 def fetch_diff(repo_url: str, pr_number: int, github_token: Optional[str] = None) -> Tuple[str, str]:
@@ -132,52 +78,55 @@ def fetch_diff(repo_url: str, pr_number: int, github_token: Optional[str] = None
 @tool
 def analyze_code_diff(code_diff: str, file_content: str) -> dict:
     """Analyze a code diff for style, bugs, performance, and best practices."""
-    from langchain_ollama import OllamaLLM 
-    from collections import defaultdict
-    import json
-    import os
+    # Pick LLM based on environment variable
+    llm_to_use = os.getenv("LLM_TO_USE", "gemini") # "ollama" | "gemini"
 
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    # llm = OllamaLLM(model="codellama:7b", base_url=base_url)
+    if llm_to_use == "gemini":
+        results = invokeGemini(code_diff, file_content)
+    elif llm_to_use == "ollama":
+        results = invokeOllama(code_diff, file_content)
+    else:
+        raise ValueError(f"Unknown LLM to use: {llm_to_use}")
+
+    raw_issues = results
+
+    # Group issues by file
+    files_dict = defaultdict(list)
+    for issue in raw_issues:
+        files_dict[issue["file"]].append({
+            "type": issue["type"],
+            "line": issue["line"],
+            "description": issue["description"],
+            "suggestion": issue["suggestion"]
+        })
+
+    files = [
+        {
+            "name": filename,
+            "issues": issues
+        }
+        for filename, issues in files_dict.items()
+    ]
+
+    # Calculate summary
+    total_issues = len(raw_issues)
+    critical_issues = sum(1 for issue in raw_issues if issue.get("critical"))
+
+    summary = {
+        "total_files": len(files),
+        "total_issues": total_issues,
+        "critical_issues": critical_issues
+    }
+
+    results = {
+        "files": files,
+        "summary": summary
+    }
+
+    return results
+
+def invokeGemini(code_diff: str, file_content: str) -> dict:
     model = genai.GenerativeModel("gemini-2.5-flash")
-
-#For Ollama
-#     prompt = f"""
-# SYSTEM: You are a code review assistant. Analyze the Git diff and return ONLY a JSON array of issues. Do not explain, acknowledge, or provide any other text.
-
-# TASK: Identify actual issues introduced by the changes in the diff below.
-
-# RULES:
-# - Only analyze lines with + (additions) and - (deletions)
-# - Ignore pre-existing code that wasn't changed
-# - Don't flag intentionally commented-out code as unused
-# - Focus on problems introduced by the changes
-
-# FILE CONTENT BEFORE CHANGES:
-# {file_content}
-
-# GIT DIFF:
-# {code_diff}
-
-# OUTPUT FORMAT - Return ONLY this JSON structure, nothing else:
-# [
-#   {{
-#     "file": "filename",
-#     "type": "bug|style|performance|best_practice", 
-#     "line": number,
-#     "description": "issue description",
-#     "suggestion": "fix suggestion",
-#     "critical": true|false
-#   }}
-# ]
-
-# CRITICAL: 
-# - bug = runtime errors/broken functionality
-# - performance = significant performance issues
-# - Return [] if no issues found
-# - Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
-# Your response must start with `[` and end with `]`.
-# """
 
     prompt = f"""
 SYSTEM: You are a code review assistant. Analyze the Git diff and return ONLY a JSON array of issues. Do not explain, acknowledge, or provide any other text.
@@ -222,43 +171,54 @@ CRITICAL:
 ), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
 Your response must start with `[` and end with `]`.
 """
-    # raw_output = llm.invoke(prompt)
     response = model.generate_content(prompt)
     raw_output = response.text.strip()
 
-
     raw_issues = json.loads(raw_output)
-    files_dict = defaultdict(list)
-    for issue in raw_issues:
-        files_dict[issue["file"]].append({
-            "type": issue["type"],
-            "line": issue["line"],
-            "description": issue["description"],
-            "suggestion": issue["suggestion"]
-        })
 
-    files = [
-        {
-            "name": filename,
-            "issues": issues
-        }
-        for filename, issues in files_dict.items()
-    ]
+    return raw_issues
 
-    total_issues = len(raw_issues)
-    critical_issues = sum(1 for issue in raw_issues if issue.get("critical"))
+def invokeOllama(code_diff: str, file_content: str) -> dict:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    llm = OllamaLLM(model="codellama:7b", base_url=base_url)
 
-    summary = {
-        "total_files": len(files),
-        "total_issues": total_issues,
-        "critical_issues": critical_issues
-    }
+    prompt = f"""
+SYSTEM: You are a code review assistant. Analyze the Git diff and return ONLY a JSON array of issues. Do not explain, acknowledge, or provide any other text.
 
-    results = {
-        "files": files,
-        "summary": summary
-    }
+TASK: Identify actual issues introduced by the changes in the diff below.
 
-    return results
+RULES:
+- Only analyze lines with + (additions) and - (deletions)
+- Ignore pre-existing code that wasn't changed
+- Don't flag intentionally commented-out code as unused
+- Focus on problems introduced by the changes
 
-   
+FILE CONTENT BEFORE CHANGES:
+{file_content}
+
+GIT DIFF:
+{code_diff}
+
+OUTPUT FORMAT - Return ONLY this JSON structure, nothing else:
+[
+  {{
+    "file": string,
+    "type": "bug|style|performance|best_practice", 
+    "line": number,
+    "description": string,
+    "suggestion": string,
+    "critical": true|false
+  }}
+]
+
+CRITICAL: 
+- bug = runtime errors/broken functionality
+- performance = significant performance issues
+- Return [] if no issues found
+- Return *only* raw JSON. Do not wrap the response in triple backticks (```), markdown formatting, or explanations. Just plain JSON, no prefix, no suffix, no code block.
+Your response must start with `[` and end with `]`.
+"""
+
+    raw_output = llm.invoke(prompt).strip()
+    raw_issues = json.loads(raw_output)
+    return raw_issues
