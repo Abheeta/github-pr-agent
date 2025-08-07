@@ -1,10 +1,16 @@
 import requests
 from app.agents.graph import graph
 from celery import current_task
+from app.core.celery_app import TaskResultManager
+from celery.result import AsyncResult
+from app.core.celery_app import celery_app
 
 def run_agent(repo_url: str, pr_number: int, github_token: str = None, webhook_url: str = None):
     task_id = current_task.request.id
     print(f"[DEBUG] Running agent on repo: {repo_url}, PR: {pr_number}")
+
+    # Set initial status as processing
+    TaskResultManager.set_task_status(task_id, "processing")
 
     initial_state = {
         "repo_url": repo_url,
@@ -15,24 +21,30 @@ def run_agent(repo_url: str, pr_number: int, github_token: str = None, webhook_u
     try:
         final_state = graph.invoke(initial_state)
         result_data = final_state.get("result", {})
-        raw = final_state.get("result", {}).get("raw")
+        # raw = final_state.get("result", {}).get("raw")
         print(final_state, "FINAL STATE")
+
+        # Store successful results in Redis
+        TaskResultManager.set_task_status(task_id, "completed", results=result_data)
 
         payload = {
             "task_id": task_id,
-            "status": "SUCCESS",
-            "results": raw,
+            "status": "completed",
+            "results": result_data,
             "error": None
         }
 
     except Exception as e:
-        # If the graph or anything else fails
+        # Store failure in Redis
+        error_message = str(e)
+        TaskResultManager.set_task_status(task_id, "failed", error=error_message)
+        
         result_data = {}
         payload = {
             "task_id": task_id,
-            "status": "FAILURE",
+            "status": "failed",
             "results": None,
-            "error": str(e)
+            "error": error_message
         }
 
     # Fire webhook, non-blocking, logs errors if any

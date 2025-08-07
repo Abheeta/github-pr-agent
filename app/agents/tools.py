@@ -227,40 +227,38 @@ Your response must start with `[` and end with `]`.
     raw_output = response.text.strip()
 
 
-    try:
-        raw_issues = json.loads(raw_output)
-        files_dict = defaultdict(list)
-        for issue in raw_issues:
-            files_dict[issue["file"]].append({
-                "type": issue["type"],
-                "line": issue["line"],
-                "description": issue["description"],
-                "suggestion": issue["suggestion"]
-            })
+    raw_issues = json.loads(raw_output)
+    files_dict = defaultdict(list)
+    for issue in raw_issues:
+        files_dict[issue["file"]].append({
+            "type": issue["type"],
+            "line": issue["line"],
+            "description": issue["description"],
+            "suggestion": issue["suggestion"]
+        })
 
-        files = [
-            {
-                "name": filename,
-                "issues": issues
-            }
-            for filename, issues in files_dict.items()
-        ]
-
-        total_issues = len(raw_issues)
-        critical_issues = sum(1 for issue in raw_issues if issue.get("critical"))
-
-        summary = {
-            "total_files": len(files),
-            "total_issues": total_issues,
-            "critical_issues": critical_issues
+    files = [
+        {
+            "name": filename,
+            "issues": issues
         }
+        for filename, issues in files_dict.items()
+    ]
 
-        results = {
-            "files": files,
-            "summary": summary
-        }
+    total_issues = len(raw_issues)
+    critical_issues = sum(1 for issue in raw_issues if issue.get("critical"))
 
-        return {"error": None, "raw": results}
+    summary = {
+        "total_files": len(files),
+        "total_issues": total_issues,
+        "critical_issues": critical_issues
+    }
 
-    except Exception:
-        return {"error": "Failed to parse model response", "raw": raw_output}
+    results = {
+        "files": files,
+        "summary": summary
+    }
+
+    return results
+
+   
