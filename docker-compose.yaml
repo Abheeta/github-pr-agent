@@ -27,7 +27,6 @@ services:
     depends_on:
       - redis
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - REDIS_URL={REDIS_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - LLM_TO_USE=${LLM_TO_USE}

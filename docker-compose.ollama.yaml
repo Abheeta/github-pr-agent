@@ -42,10 +42,8 @@ services:
       - redis
       - ollama
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - REDIS_URL={REDIS_URL}
+      - OLLAMA_BASE_URL={OLLAMA_BASE_URL}
       - LLM_TO_USE=${LLM_TO_USE}
 
 volumes:
